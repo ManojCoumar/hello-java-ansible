@@ -64,7 +64,7 @@ jobs:
       run: |
         docker push ${{ secrets.DOCKER_USERNAME }}/hello-java:latest
 
-  deploy-to-k8s:
+  deploy-with-ansible:
     needs: docker-build-push
     runs-on: ubuntu-latest
 
@@ -72,25 +72,18 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Start Minikube
-        uses: medyagh/setup-minikube@master
-        with:
-          minikube-version: 'latest'
-          driver: docker
-
-      - name: Verify Minikube is running
+      - name: Install Ansible
         run: |
-          kubectl get nodes
-          minikube status
+          sudo apt update
+          sudo apt install -y ansible
 
-      - name: Pull Docker image into Minikube
+      - name: Setup SSH Key
         run: |
-          eval $(minikube docker-env)
-          docker pull manojravichandiran/hello-java:latest
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
-      - name: Deploy to Kubernetes
+      - name: Run Ansible Playbook (Linux)
         run: |
-          kubectl apply -f k8s/
-          kubectl rollout status deployment/hello-java --timeout=120s
-          kubectl get pods
-          kubectl get services
+          ansible-playbook -i ansible_linux/inventory.ini ansible_linux/deploy.yml
